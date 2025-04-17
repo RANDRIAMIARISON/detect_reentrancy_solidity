@@ -1,10 +1,11 @@
 import solcx
 import networkx as nx
-import pprint 
+import pprint
+import sys 
 
 def compile_contract(contract_source):
-    # solcx.install_solc('0.8.0')  # Install Solidity compiler version 0.8.0
-    solcx.set_solc_version('0.8.0')
+    #solcx.install_solc('0.8.25')  # Install Solidity compiler version 0.8.0
+    solcx.set_solc_version('0.8.25')
     compiled_sol = solcx.compile_source(contract_source, output_values=['ast'])
     return compiled_sol
 
@@ -94,34 +95,6 @@ def traverse_ast_iteratively(ast):
     return cfg
 
 
-
-contract_source = '''
-pragma solidity ^0.8.0;
-// Un exemple de contrat sécurisé contre la réentrance
-
-
-contract SecureContract {
-    mapping(address => uint) public balances;
-
-    function deposit() external payable {
-        balances[msg.sender] += msg.value;
-    }
-
-    function withdraw(uint amount) external {
-        require(balances[msg.sender] >= amount, "Insufficient balance");
-
-        // Mise à jour du solde avant de faire l'envoi d'Ether
-        balances[msg.sender] -= amount;
-
-        // Envoi d'Ether
-        (bool success, ) = msg.sender.call{value: amount}("");
-        require(success, "Transfer failed");
-    }
-    
-}
-
-
-'''
 def analyze_retrancy(state_chng,external_fun,nodes_edge):
     # Analyze the control flow graph (CFG) to detect reentrancy vulnerabilities
     vulnerabilities = []
@@ -159,23 +132,52 @@ def singl_cross(state_chng,external_fun,nodes_edge):
 
 
 
-compiled = compile_contract(contract_source)
-
-# Access the array of AST nodes for the contract "TestContract"
-ast = compiled['<stdin>:SecureContract']['ast']['nodes']
-
-
-state_chng = state_changes(ast)
-external_fun = detect_external_calls(ast)
-nodes_edge = traverse_ast_iteratively(ast)
 
 # vulnerablty_or_not = detect_reentrancy_vulnerabilities(ast,state_chng,external_fun,nodes_edge)
 
 
-print(state_chng)
-print(external_fun)
-print(nodes_edge.nodes)
-print(nodes_edge.edges)
-vuln=analyze_retrancy(state_chng,external_fun,nodes_edge)
-print(vuln)
+# print(state_chng)
+# print(external_fun)
+# print(nodes_edge.nodes)
+# print(nodes_edge.edges)
 
+
+
+def analyze_solidity_file(file_path):
+    if not file_path.endswith(".sol"):
+        print("Error: Please provide a Solidity (.sol) file.")
+        return
+    else:
+        
+        try:
+            with open(file_path, 'r', encoding='utf-8') as file:
+                content = file.read()
+            print(content)
+
+            # vulnerabilities = analyze_solidity_code(content)
+            compiled = compile_contract(content)
+
+            # Access the array of AST nodes for the contract "TestContract"
+            ast = compiled['<stdin>:ReentrancyExample']['ast']['nodes']
+
+
+            state_chng = state_changes(ast)
+            external_fun = detect_external_calls(ast)
+            nodes_edge = traverse_ast_iteratively(ast)
+            vuln=analyze_retrancy(state_chng,external_fun,nodes_edge)
+            print(vuln)
+            
+           
+            
+        except FileNotFoundError:
+            print(f"Error: The file '{file_path}' was not found.")
+        except Exception as e:
+            print(f"An error occurred: {e}")
+
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Usage: python script.py <solidity_file.sol>")
+    else:
+        analyze_solidity_file(sys.argv[1])
