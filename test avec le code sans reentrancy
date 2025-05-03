@@ -1,0 +1,48 @@
+1. https://etherscan.io/address/0x3d96eec26865d0bfac851e0640197ee713291f5b#code
+3_5_2025  21:09  0.4.24
+
+2. https://etherscan.io/address/0x6e171e80024232ebd4e8fa7eaf08b88eae280369#code
+3_5_2025  21:09  0.4.25
+
+3. https://etherscan.io/address/0x2b8fcd21412e6e1b4b6f12b7ea4c9902b738162b#code
+3_5_2025  21:09  0.4.24
+
+4. https://etherscan.io/address/0x5c5f872e848ed764a56a4a3be82afbae71a0dcea#code
+0.4.24
+
+5. https://etherscan.io/address/0x21d71983047502509c3be17cb33ad0f810104720#code
+4.24
+
+6. https://etherscan.io/address/0xbbeae2be853076412ee4f19dcdfd7c556f9cfd53#code
+4.24
+
+7. https://etherscan.io/address/0xea7a773262c6ffdd9272d90764ca6c87b831f4db#code
+4.25
+
+8. https://etherscan.io/address/0x56190ef084441dfde78fe6cb9a0c5b03b108ef48#code
+4.17
+
+9. https://etherscan.io/address/0x6b74e5c4137afd6a7dbd9d43c9d7af2a258e57a7#code
+6.12
+
+10. https://etherscan.io/address/0x5ed3c9089ed0355bc77cf439dc2ed28c4054c8c4#code
+6.12
+
+11. https://etherscan.io/address/0xbee61423ef891d33c1ef322338ef85c536898d80#code  //vrai reentrancy no bugs
+4.23
+
+12. https://etherscan.io/address/0xbbeae2be853076412ee4f19dcdfd7c556f9cfd53#code 
+4.24
+
+13. https://etherscan.io/address/0x9cf93c1d0a6fe85f5910fa360dac0c80ef518496#code
+4.24
+
+14. https://etherscan.io/address/0x4abe61182f8e49bf55ca1c4b2d21d4a1812dbbef#code
+4.24
+15. 
+https://etherscan.io/address/0xbee61423ef891d33c1ef322338ef85c536898d80#code
+4.23
+
+Test de notre approche avec le code solidity correct (sans reentrancy)
+On a tester notre approche du 3 May 2025 21:45
+
