@@ -1,146 +1,137 @@
-import solcx
+
+import sys
 import networkx as nx
-import pprint
-import sys 
+from solcx import install_solc, compile_source
+import re
 
-def compile_contract(contract_source):
-    #solcx.install_solc('0.8.25')  # Install Solidity compiler version 0.8.0
-    solcx.set_solc_version('0.8.25')
-    compiled_sol = solcx.compile_source(contract_source, output_values=['ast'])
-    return compiled_sol
-
-def state_changes(ast):
-    cfg = nx.DiGraph()  # Initialize directed graph for CFG
-    state_change = []  # Track the current function being traversed
-    nodes_to_visit = ast[:]  # Stack for iterative traversal
+def get_ast_from_solidity(source_code, solc_version="0.4.26"):
     
-    # print(nodes_to_visit)
-    while nodes_to_visit:
-        node = nodes_to_visit.pop()        
-        if isinstance(node, dict):
-            # Detect state changes (e.g., assignment to state variables)
-            if node.get('nodeType') == 'Assignment':
-                left_hand_side = node.get('leftHandSide', {})
-                basedexpress = left_hand_side.get('baseExpression',{})
-                if basedexpress.get('nodeType') == 'Identifier' and basedexpress.get('referencedDeclaration', ''):
-                    state_change.append(basedexpress.get('name', ''))
-                
-            # Add child nodes to the list for further traversal
-            for key in node:
-                if isinstance(node[key], list):
-                    nodes_to_visit.extend(node[key])
-                elif isinstance(node[key], dict):
-                    nodes_to_visit.append(node[key])
-
-    return state_change
-
-
-def detect_external_calls(ast):
-    cfg = nx.DiGraph()  # Initialize directed graph for CFG
-    external_calls = []  # Track the current function being traversed
-    nodes_to_visit = ast[:]  # Stack for iterative traversal
+    #install_solc(solc_version)
     
-    # print(nodes_to_visit)
-    while nodes_to_visit:
-        node = nodes_to_visit.pop()        
-        if isinstance(node, dict):
-            # Detect external calls (e.g., .call, .send, .transfer)
-            if node.get('nodeType') == 'MemberAccess' and node.get('memberName', '') in ['call', 'delegatecall', 'sender', 'transfer']:
-                # print("etoooooooohery")
-                external_calls.append(node.get('memberName', ''))    
-
-                
-            # Add child nodes to the list for further traversal
-            for key in node:
-                if isinstance(node[key], list):
-                    nodes_to_visit.extend(node[key])
-                elif isinstance(node[key], dict):
-                    nodes_to_visit.append(node[key])
-
-    return external_calls
-
-
-def traverse_ast_iteratively(ast):
-    cfg = nx.DiGraph()  # Initialize directed graph for CFG
-    current_function = None  # Track the current function being traversed
-    nodes_to_visit = ast[:]  # Stack for iterative traversal
-    
-    # print(nodes_to_visit)
-    while nodes_to_visit:
-        node = nodes_to_visit.pop()        
-        if isinstance(node, dict):
-            # Check if this node is a FunctionCall
-            if node.get('nodeType') == 'FunctionDefinition':
-                # print("izyyy")
-                function_name = node.get('name')
-                
-                cfg.add_node(function_name) #tong etoooo alohaaa
-                # print(function_name) #attack() withdraw() deposit() grand fonction dans le solidity
-            if node.get('nodeType') == 'FunctionCall':
-                expression = node.get('expression', {})
-                if expression.get('nodeType') == 'Identifier':
-
-                    callee = expression['name']
-                    # print(callee) #fonction anatny withdraw() require()
-                    cfg.add_edge(callee, callee)
-                   
-                
-            # Add child nodes to the list for further traversal
-            for key in node:
-                if isinstance(node[key], list):
-                    nodes_to_visit.extend(node[key])
-                elif isinstance(node[key], dict):
-                    nodes_to_visit.append(node[key])
-
-    return cfg
-
-
-def analyze_retrancy(state_chng,external_fun,nodes_edge):
-    # Analyze the control flow graph (CFG) to detect reentrancy vulnerabilities
-    vulnerabilities = []
-
-    singl_cros = singl_cross(state_chng,external_fun,nodes_edge)
-    print(len(singl_cros))
-    
-    if singl_cros: #mila boucle for pour récuperer leurs contenus
-        for sinc in singl_cros:
-            if sinc == 'Single':
-                vulnerabilities.append("Potential unrestricted reentrancy vulnerability detected. single type error")
-            elif sinc== 'Cross':
-                vulnerabilities.append("Potential unrestricted reentrancy vulnerability detected. Cross type error")
-
-    else:
-        vulnerabilities.append("No reentrancy vulnerabilities detected.")
-    return vulnerabilities
-
-def singl_cross(state_chng,external_fun,nodes_edge):
-    vulnerabilities = []
-    verif = []
-    if state_chng and external_fun and len(nodes_edge)==1:
-        vulnerabilities.append("Single")
-
-    elif len(nodes_edge)>=2 and state_chng and external_fun:
+    try:
+        # Compile with AST output
+        compiled = compile_source(
+            source_code,
+            solc_version=solc_version,
+            output_values=["ast"],
+        )
         
-        for nod in nodes_edge:
-            if nod == 'deposit' or nod == 'withdraw':
-                verif.append("test")
+        # Find the first contract AST (assuming single contract compilation)
+        for contract_id, contract_data in compiled.items():
+            if contract_id != "<stdin>":
+                return contract_data['ast']
+        
+        # Fallback if no contract found
+        if '<stdin>' in compiled:
+            return compiled['<stdin>']['ast']
+            
+        raise ValueError("No contract AST found in compilation output")
+        
+    except Exception as e:
+        raise RuntimeError(f"Failed to compile or parse AST: {str(e)}")
+
+
+def traverse_ast_and_build_cfg(ast_root):
+    """Traverse AST and build a simple CFG. Detect reentrancy pattern."""
+    cfg = nx.DiGraph()
+    functions = {}  # Map function names to their bodies
+    vulnerabilities = []
+
+    stack = [ast_root]
+
+    while stack:
+        node = stack.pop()
+        if not isinstance(node, dict):
+            continue
+
+        node_type = node.get("name")
+        
+        # Handle function definitions
+        if node_type == "FunctionDefinition":
+            func_name = node.get("attributes", {}).get("name", "anonymous")
+            
+            body = node.get("children", [])
+        
+            functions[func_name] = body
+
+        # Traverse children
+        if 'children' in node:
+            stack.extend(node['children'])
+
+    # Analyze each function for reentrancy
+    for func, body in functions.items():
+
+        found_external_call = False
+        found_state_change = False
+
+        visit_stack = list(body)
+
+        while visit_stack:
+            node = visit_stack.pop()
+            if not isinstance(node, dict):
+                continue
+
+            node_name = node.get("name")
+            
+
+            # Detect external calls (e.g., .call.value(), .transfer, .send)
+            if node_name == "FunctionCall":
                 
-        if len(verif)!=0:        
-                vulnerabilities.append("Cross")
+                expression = node.get('children', [{}])[0]
+             
+                if isinstance(expression, dict):
+                    value = expression.get('attributes', {}).get('member_name', '')
+                   
+                    if any(ext in value for ext in ['call', 'send', 'transfer']):
+                    
+                        found_external_call = True
+                        called = value
+                        # print(called)
+                        cfg.add_edge(func, f"external_call:{called}")
+
+            # Detect state changes (VariableAssignment, etc.)
+            if node_name in ["ExpressionStatement", "Assignment"]:
+                found_state_change = True
+                cfg.add_edge(func, "state_change")
+
+            # Continue traversal
+            if 'children' in node:
+                visit_stack.extend(node['children'])
+
+        # Detect reentrancy pattern
+        if found_external_call and not found_state_change:
+            vulnerabilities.append((func, "Potential single-function reentrancy"))
+        elif found_external_call and found_state_change:
+            vulnerabilities.append((func, "Potential cross-function reentrancy"))
 
     return vulnerabilities
 
 
 
 
-# vulnerablty_or_not = detect_reentrancy_vulnerabilities(ast,state_chng,external_fun,nodes_edge)
+def detect_reentrancy(contract_code):
+    warnings = []
 
+    # Normalize whitespace
+    lines = contract_code.split('\n')
+    for i, line in enumerate(lines):
+        line = line.strip()
 
-# print(state_chng)
-# print(external_fun)
-# print(nodes_edge.nodes)
-# print(nodes_edge.edges)
+        # Look for vulnerable low-level call
+        if re.search(r'\.call\.value\s*\(', line):
+            # Look ahead in a few lines for state update to balances AFTER the call
+            context = lines[i:i+10]  # Check next 10 lines
+            for j, follow_line in enumerate(context):
+                if re.search(r'balances\s*\[\s*msg\.sender\s*\]\s*[-+*/]?=', follow_line):
+                    if j > 0:  # This means call.value came before balance update
+                        warnings.append({
+                            "line": i + 1,
+                            "issue": "Potential reentrancy vulnerability: external call before state update",
+                            "code": line
+                        })
+                    break
 
+    return warnings
 
 
 def analyze_solidity_file(file_path):
@@ -152,22 +143,26 @@ def analyze_solidity_file(file_path):
         try:
             with open(file_path, 'r', encoding='utf-8') as file:
                 content = file.read()
-            print(content)
+          
+            ast = get_ast_from_solidity(content)
+            regex = detect_reentrancy(content)
+  
+            if ast and regex:
+                warnings = traverse_ast_and_build_cfg(ast)
+                print("=== Control Flow Graph Nodes ===")
+             
+                print("\n=== Reentrancy Warnings ===\n")
+                print("\n=== from regex ===\n")
+                for iss in regex:
+                    print(f"Line {iss['line']}: {iss['issue']}")
+                    print(f"→ {iss['code']}")
+                print("\n =====from CFG===== \n")
 
-            # vulnerabilities = analyze_solidity_code(content)
-            compiled = compile_contract(content)
-
-            # Access the array of AST nodes for the contract "TestContract"
-            ast = compiled['<stdin>:ReentrancyExample']['ast']['nodes']
-
-
-            state_chng = state_changes(ast)
-            external_fun = detect_external_calls(ast)
-            nodes_edge = traverse_ast_iteratively(ast)
-            vuln=analyze_retrancy(state_chng,external_fun,nodes_edge)
-            print(vuln)
-            
-           
+                for func, issue in warnings:
+                    print(f"[!] {func}: {issue}")
+            else:
+                print("✅ Solidity correct syntax code!!!. ")
+                print("✅ No obvious reentrancy issues found.")
             
         except FileNotFoundError:
             print(f"Error: The file '{file_path}' was not found.")
